@@ -1,6 +1,8 @@
 package easql
 
 import (
+	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -9,45 +11,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func mock() (db *DB, mock sqlmock.Sqlmock, err error) {
-	raw, mock, err := sqlmock.New()
+var (
+	db   *DB
+	mock sqlmock.Sqlmock
+	err  error
+)
+
+func TestMain(m *testing.M) {
+	var raw *sql.DB
+	raw, mock, err = sqlmock.New()
 	if err != nil {
 		return
 	}
 	db = NewDB(sqlx.NewDb(raw, "mysql"))
-	return
+	os.Exit(m.Run())
 }
 
 func TestNewDB(t *testing.T) {
-	db, _, err := mock()
-	defer func() {
-		_ = db.Close()
-	}()
+	t.Parallel()
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 }
 
-func TestClose(t *testing.T) {
-	db, mock, _ := mock()
-	mock.ExpectClose()
-	err := db.Close()
-	assert.NoError(t, err)
-}
-
 func TestDBImplementsGet(t *testing.T) {
-	db, _, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
 	assert.Implements(t, (*Queryer)(nil), db)
 }
 
 func TestTxImplementsGet(t *testing.T) {
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
-
 	mock.ExpectBegin()
 	tx, err := db.Begin()
 	assert.NoError(t, err)
@@ -56,10 +46,6 @@ func TestTxImplementsGet(t *testing.T) {
 }
 
 func TestRollback(t *testing.T) {
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
 	mock.ExpectBegin()
 	mock.ExpectRollback()
 
@@ -73,16 +59,12 @@ func testQuery(queryer Queryer, fn func(Queryer)) {
 }
 
 func TestQueryer_Get(t *testing.T) {
+	t.Parallel()
 	fn := func(q Queryer) {
 		var id int
 		_ = q.Get(&id, sq.Select("id").From("users").
 			Where(sq.Eq{"id": 1}))
 	}
-
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
 
 	// DB
 	mock.ExpectQuery("SELECT id FROM users WHERE id=?").WithArgs(1)
@@ -105,11 +87,6 @@ func TestQuery_Select(t *testing.T) {
 		_ = q.Select(&ids, sq.Select("id").From("users"))
 	}
 
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
-
 	// DB
 	mock.ExpectQuery("SELECT id FROM users")
 	testQuery(db, fn)
@@ -130,11 +107,6 @@ func TestQuery_Insert(t *testing.T) {
 		_, _ = q.Insert(sq.Insert("users").Columns("id").
 			Values(1))
 	}
-
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
 
 	expectQuery := func() {
 		mock.ExpectExec("INSERT INTO users").WithArgs(1)
@@ -158,11 +130,6 @@ func TestQuery_Update(t *testing.T) {
 	fn := func(q Queryer) {
 		_, _ = q.Update(sq.Update("users").Set("name", "leo").Where(sq.Eq{"id": 1}))
 	}
-
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
 
 	expectQuery := func() {
 		mock.ExpectExec("UPDATE users SET name").WithArgs("leo", 1)
@@ -188,11 +155,6 @@ func TestQuery_Delete(t *testing.T) {
 			_, _ = q.Delete(sq.Delete("users").Where(sq.Eq{"id": 1}))
 		}(q)
 	}
-
-	db, mock, _ := mock()
-	defer func() {
-		_ = db.Close()
-	}()
 
 	expectQuery := func() {
 		mock.ExpectExec("DELETE FROM users").WithArgs(1)
