@@ -2,10 +2,9 @@ package easql
 
 import (
 	"database/sql"
-	"fmt"
 
+	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
-	"gopkg.in/Masterminds/squirrel.v1"
 )
 
 type Queryer interface {
@@ -109,42 +108,4 @@ func (tx *Tx) Commit() error {
 
 func (tx *Tx) Rollback() error {
 	return tx.raw.Rollback()
-}
-
-type Config struct {
-	Host         string
-	Port         int
-	Name         string
-	User         string
-	Password     string
-	Charset      string
-	Location     string
-	MaxIdleConns int
-	MaxOpenConns int
-	MapperFunc   func(string) string
-}
-
-func OpenMySQL(c *Config) (*DB, error) {
-	sqlxdb, err := sqlx.Open("mysql", fmt.Sprintf(
-		"%s:%s@tcp(%s:%d)/%s?charset=%s&parseTime=True&loc=%s",
-		c.User,
-		c.Password,
-		c.Host,
-		c.Port,
-		c.Name,
-		c.Charset,
-		c.Location,
-	))
-	if err != nil {
-		return nil, err
-	}
-	sqlxdb.SetMaxIdleConns(c.MaxIdleConns)
-	sqlxdb.SetMaxOpenConns(c.MaxOpenConns)
-	sqlxdb.MapperFunc(c.MapperFunc)
-
-	if err := sqlxdb.Ping(); err != nil {
-		return nil, err
-	}
-
-	return NewDB(sqlxdb), nil
 }

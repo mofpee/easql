@@ -3,11 +3,10 @@ package easql
 import (
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
-
-	sq "gopkg.in/Masterminds/squirrel.v1"
 )
 
 func mock() (db *DB, mock sqlmock.Sqlmock, err error) {
@@ -21,7 +20,9 @@ func mock() (db *DB, mock sqlmock.Sqlmock, err error) {
 
 func TestNewDB(t *testing.T) {
 	db, _, err := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 	assert.NoError(t, err)
 	assert.NotNil(t, db)
 }
@@ -35,13 +36,17 @@ func TestClose(t *testing.T) {
 
 func TestDBImplementsGet(t *testing.T) {
 	db, _, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 	assert.Implements(t, (*Queryer)(nil), db)
 }
 
 func TestTxImplementsGet(t *testing.T) {
 	db, mock, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	mock.ExpectBegin()
 	tx, err := db.Begin()
@@ -52,8 +57,9 @@ func TestTxImplementsGet(t *testing.T) {
 
 func TestRollback(t *testing.T) {
 	db, mock, _ := mock()
-	defer db.Close()
-
+	defer func() {
+		_ = db.Close()
+	}()
 	mock.ExpectBegin()
 	mock.ExpectRollback()
 
@@ -69,12 +75,14 @@ func testQuery(queryer Queryer, fn func(Queryer)) {
 func TestQueryer_Get(t *testing.T) {
 	fn := func(q Queryer) {
 		var id int
-		q.Get(&id, sq.Select("id").From("users").
+		_ = q.Get(&id, sq.Select("id").From("users").
 			Where(sq.Eq{"id": 1}))
 	}
 
 	db, mock, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	// DB
 	mock.ExpectQuery("SELECT id FROM users WHERE id=?").WithArgs(1)
@@ -87,18 +95,20 @@ func TestQueryer_Get(t *testing.T) {
 	mock.ExpectCommit()
 	tx, _ := db.Begin()
 	testQuery(tx, fn)
-	tx.Commit()
+	_ = tx.Commit()
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestQuery_Select(t *testing.T) {
 	fn := func(q Queryer) {
 		var ids []int
-		q.Select(&ids, sq.Select("id").From("users"))
+		_ = q.Select(&ids, sq.Select("id").From("users"))
 	}
 
 	db, mock, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	// DB
 	mock.ExpectQuery("SELECT id FROM users")
@@ -111,18 +121,20 @@ func TestQuery_Select(t *testing.T) {
 	mock.ExpectCommit()
 	tx, _ := db.Begin()
 	testQuery(tx, fn)
-	tx.Commit()
+	_ = tx.Commit()
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestQuery_Insert(t *testing.T) {
 	fn := func(q Queryer) {
-		q.Insert(sq.Insert("users").Columns("id").
+		_, _ = q.Insert(sq.Insert("users").Columns("id").
 			Values(1))
 	}
 
 	db, mock, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	expectQuery := func() {
 		mock.ExpectExec("INSERT INTO users").WithArgs(1)
@@ -138,17 +150,19 @@ func TestQuery_Insert(t *testing.T) {
 	expectQuery()
 	tx, _ := db.Begin()
 	testQuery(tx, fn)
-	tx.Commit()
+	_ = tx.Commit()
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestQuery_Update(t *testing.T) {
 	fn := func(q Queryer) {
-		q.Update(sq.Update("users").Set("name", "leo").Where(sq.Eq{"id": 1}))
+		_, _ = q.Update(sq.Update("users").Set("name", "leo").Where(sq.Eq{"id": 1}))
 	}
 
 	db, mock, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	expectQuery := func() {
 		mock.ExpectExec("UPDATE users SET name").WithArgs("leo", 1)
@@ -164,19 +178,21 @@ func TestQuery_Update(t *testing.T) {
 	expectQuery()
 	tx, _ := db.Begin()
 	testQuery(tx, fn)
-	tx.Commit()
+	_ = tx.Commit()
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
 func TestQuery_Delete(t *testing.T) {
 	doQuery := func(q Queryer) {
 		func(q Queryer) {
-			q.Delete(sq.Delete("users").Where(sq.Eq{"id": 1}))
+			_, _ = q.Delete(sq.Delete("users").Where(sq.Eq{"id": 1}))
 		}(q)
 	}
 
 	db, mock, _ := mock()
-	defer db.Close()
+	defer func() {
+		_ = db.Close()
+	}()
 
 	expectQuery := func() {
 		mock.ExpectExec("DELETE FROM users").WithArgs(1)
@@ -192,6 +208,6 @@ func TestQuery_Delete(t *testing.T) {
 	expectQuery()
 	tx, _ := db.Begin()
 	doQuery(tx)
-	tx.Commit()
+	_ = tx.Commit()
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
